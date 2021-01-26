@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - Introduce NPM shields in the README. (#1)
 
+### Fixed
+- Fix npm module name in README shields. (#2)
+
 ## 1.0.0 - 2021-01-26
 ### Added
 - Initial release
