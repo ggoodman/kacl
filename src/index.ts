@@ -15,7 +15,7 @@ Yargs.help()
   .demandCommand()
   .recommendCommands()
   .strict()
-  .showHelpOnFail(false)
+  .showHelpOnFail(true)
   .command('add', 'Add changes to the unreleased version', (yargs) => {
     yargs = yargs.demandCommand().recommendCommands().showHelpOnFail(true);
 
@@ -55,7 +55,7 @@ Yargs.help()
             changelog.addRelease(unreleased);
           }
 
-          const changeText = await readChangeText(argv.change);
+          const changeText = await readChangeText(type, argv.change);
 
           unreleased.addChange(type, changeText);
 
@@ -111,12 +111,19 @@ Yargs.help()
   .command(
     'lint',
     'Check the format of your changelog',
-    {
-      filename: {
-        default: 'CHANGELOG.md',
-        description: 'The name of the changelog file to write',
-      },
-    } as const,
+    (yargs) =>
+      yargs
+        .epilogue(
+          `Hint: You should consider adding this as your ${Chalk.bold(
+            'posttest'
+          )} command in package.json.`
+        )
+        .options({
+          filename: {
+            default: 'CHANGELOG.md',
+            description: 'The name of the changelog file to write',
+          },
+        } as const),
     async (argv) => {
       await getPackage();
       await getChangelog(argv.filename);
@@ -128,12 +135,19 @@ Yargs.help()
   .command(
     'prerelease',
     'Check the requirements for creating a release',
-    {
-      filename: {
-        default: 'CHANGELOG.md',
-        description: 'The name of the changelog file to write',
-      },
-    } as const,
+    (yargs) =>
+      yargs
+        .epilogue(
+          `Hint: You should consider adding this as your ${Chalk.bold(
+            'prerelease'
+          )} command in package.json.`
+        )
+        .options({
+          filename: {
+            default: 'CHANGELOG.md',
+            description: 'The name of the changelog file to write',
+          },
+        } as const),
     async (argv) => {
       await getPackage();
       const changelog = await getChangelog(argv.filename);
@@ -149,12 +163,19 @@ Yargs.help()
   .command(
     'release',
     'Create a new release',
-    {
-      filename: {
-        default: 'CHANGELOG.md',
-        description: 'The name of the changelog file to write',
-      },
-    } as const,
+    (yargs) =>
+      yargs
+        .epilogue(
+          `Hint you should consider adding the following as your ${Chalk.bold(
+            'version'
+          )} script in package.json: ${Chalk.bold('kacl release && git add CHANGELOG.md')}`
+        )
+        .options({
+          filename: {
+            default: 'CHANGELOG.md',
+            description: 'The name of the changelog file to write',
+          },
+        } as const),
     async (argv) => {
       const pkg = await getPackage();
       const changelog = await getChangelog(argv.filename);
@@ -263,7 +284,10 @@ async function readChangeText(changeKind: string, text?: string) {
     return text;
   }
 
-  const editor = new ExternalEditor(`[//]: # (Add your description for the ${changeKind} change in markdown format below)\n\n`, { postfix: '.md' });
+  const editor = new ExternalEditor(
+    `[//]: # (Add your description for the ${changeKind} change in markdown format below)\n\n`,
+    { postfix: '.md' }
+  );
 
   try {
     const text = editor.run(); // the text is also available in editor.text
