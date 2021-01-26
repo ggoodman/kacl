@@ -1,6 +1,6 @@
 {
   "name": "kacl",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "Keep a Changelog tooling",
   "bin": {
     "kacl": "./bin/kacl"
