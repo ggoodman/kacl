@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ## [Unreleased]
 ### Added
 - Introduce NPM shields in the README. (#1)
+- Duplicate all of the previous `kacl add <command>` commands as top-level commands (ie: `kacl <command>`).
+  
+  These commands are the most typed (by far) and should therefore the easiest to access. To avoid making this a breaking change, these commands remain available underneath `kacl add`.
 
 ### Fixed
 - Fix npm module name in README shields. (#2)

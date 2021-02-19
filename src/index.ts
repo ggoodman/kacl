@@ -1,6 +1,6 @@
 import { promises as Fs } from 'fs';
 import * as Url from 'url';
-import Yargs from 'yargs';
+import Yargs, { Argv } from 'yargs';
 import { parser, Changelog, Release } from 'keep-a-changelog';
 import * as Chalk from 'chalk';
 import {
@@ -11,206 +11,199 @@ import {
   RemoveFileError,
 } from 'external-editor';
 
-Yargs.help()
-  .demandCommand()
-  .recommendCommands()
-  .strict()
-  .showHelpOnFail(true)
-  .command('add', 'Add changes to the unreleased version', (yargs) => {
-    yargs = yargs.demandCommand().recommendCommands().showHelpOnFail(true);
+const yargs = Yargs.help().demandCommand().recommendCommands().strict().showHelpOnFail(true);
 
-    for (const type of [
-      'added',
-      'changed',
-      'deprecated',
-      'removed',
-      'fixed',
-      'security',
-    ] as const) {
-      yargs = yargs.command(
-        `${type} [change]`,
-        `Insert a ${type} change in the unreleased version.`,
-        (yargs) =>
-          yargs
-            .epilogue(
-              `Hint: Make sure that you quote your change as a single shell string (ie: kacl add added "Change text"). Note that if no change text is provided you will be prompted to enter such text in your $EDITOR of choice.`
-            )
-            .positional('change', {
-              type: 'string',
-              description: 'The description of the change',
-            })
-            .options({
-              filename: {
-                default: 'CHANGELOG.md',
-                description: 'The name of the changelog file to write',
-              },
-            }),
-        async (argv) => {
-          await getPackage();
-          const changelog = await getChangelog(argv.filename);
-          let unreleased = changelog.findRelease();
+attachChangeLogHandlers(
+  yargs
+    .command('add', 'Add changes to the unreleased version', attachChangeLogHandlers)
+    .command(
+      'init',
+      'Initialize an empty CHANGELOG.md',
+      {
+        filename: {
+          default: 'CHANGELOG.md',
+          description: 'The name of the changelog file to write',
+        },
+        force: {
+          boolean: true,
+          description: 'Overwrite an existing file, if it exists.',
+        },
+      } as const,
+      async (argv) => {
+        let file: Fs.FileHandle;
 
-          if (!unreleased) {
-            unreleased = new Release();
-            changelog.addRelease(unreleased);
-          }
-
-          const changeText = await readChangeText(type, argv.change);
-
-          unreleased.addChange(type, changeText);
-
-          await Fs.writeFile(argv.filename, changelog.toString());
-
-          console.error(Chalk.green(`✅ Wrote ${argv.filename}`));
-          process.exit(0);
-        }
-      );
-    }
-
-    return yargs;
-  })
-  .command(
-    'init',
-    'Initialize an empty CHANGELOG.md',
-    {
-      filename: {
-        default: 'CHANGELOG.md',
-        description: 'The name of the changelog file to write',
-      },
-      force: {
-        boolean: true,
-        description: 'Overwrite an existing file, if it exists.',
-      },
-    } as const,
-    async (argv) => {
-      let file: Fs.FileHandle;
-
-      try {
-        file = await Fs.open(argv.filename, argv.force ? 'w' : 'wx');
-      } catch (err) {
-        console.error(
-          Chalk.red(
-            `❌ Error while attempting to take an exclusive read on ${
-              argv.filename
-            }:\n  ${Chalk.dim(err.message)}`
-          )
-        );
-        process.exit(1);
-      }
-
-      const pkg = await getPackage();
-      const changelog = new Changelog('Changelog');
-      changelog.addRelease(new Release());
-      changelog.url = pkg.repository.url;
-
-      await file.writeFile(changelog.toString());
-      console.error(Chalk.green(`✅ Wrote ${argv.filename}`));
-      process.exit(0);
-    }
-  )
-  .command(
-    'lint',
-    'Check the format of your changelog',
-    (yargs) =>
-      yargs
-        .epilogue(
-          `Hint: You should consider adding this as your ${Chalk.bold(
-            'posttest'
-          )} command in package.json.`
-        )
-        .options({
-          filename: {
-            default: 'CHANGELOG.md',
-            description: 'The name of the changelog file to write',
-          },
-        } as const),
-    async (argv) => {
-      await getPackage();
-      await getChangelog(argv.filename);
-
-      console.error(Chalk.green('✅ Changelog is valid'));
-      process.exit(0);
-    }
-  )
-  .command(
-    'prerelease',
-    'Check the requirements for creating a release',
-    (yargs) =>
-      yargs
-        .epilogue(
-          `Hint: You should consider adding this as your ${Chalk.bold(
-            'prerelease'
-          )} command in package.json.`
-        )
-        .options({
-          filename: {
-            default: 'CHANGELOG.md',
-            description: 'The name of the changelog file to write',
-          },
-        } as const),
-    async (argv) => {
-      await getPackage();
-      const changelog = await getChangelog(argv.filename);
-
-      for (const release of changelog.releases) {
-        if (!release || release.isEmpty()) {
-          console.error(`❌ No changes to the Changelog for release in ${argv.filename}`);
-          process.exit(1);
-        }
-      }
-    }
-  )
-  .command(
-    'release',
-    'Create a new release',
-    (yargs) =>
-      yargs
-        .epilogue(
-          `Hint you should consider adding the following as your ${Chalk.bold(
-            'version'
-          )} script in package.json: ${Chalk.bold('kacl release && git add CHANGELOG.md')}`
-        )
-        .options({
-          filename: {
-            default: 'CHANGELOG.md',
-            description: 'The name of the changelog file to write',
-          },
-        } as const),
-    async (argv) => {
-      const pkg = await getPackage();
-      const changelog = await getChangelog(argv.filename);
-      changelog.url = pkg.repository.url;
-
-      const unreleased = changelog.findRelease();
-      const existingRelease = changelog.findRelease(pkg.version);
-
-      if (!existingRelease) {
-        if (!unreleased || unreleased.isEmpty()) {
+        try {
+          file = await Fs.open(argv.filename, argv.force ? 'w' : 'wx');
+        } catch (err) {
           console.error(
-            Chalk.red(`❌ No changes to the Changelog for release in ${argv.filename}`)
+            Chalk.red(
+              `❌ Error while attempting to take an exclusive read on ${
+                argv.filename
+              }:\n  ${Chalk.dim(err.message)}`
+            )
           );
           process.exit(1);
         }
 
-        unreleased.setVersion(pkg.version);
-        unreleased.date = new Date();
-
+        const pkg = await getPackage();
+        const changelog = new Changelog('Changelog');
         changelog.addRelease(new Release());
+        changelog.url = pkg.repository.url;
+
+        await file.writeFile(changelog.toString());
+        console.error(Chalk.green(`✅ Wrote ${argv.filename}`));
+        process.exit(0);
+      }
+    )
+    .command(
+      'lint',
+      'Check the format of your changelog',
+      (yargs) =>
+        yargs
+          .epilogue(
+            `Hint: You should consider adding this as your ${Chalk.bold(
+              'posttest'
+            )} command in package.json.`
+          )
+          .options({
+            filename: {
+              default: 'CHANGELOG.md',
+              description: 'The name of the changelog file to write',
+            },
+          } as const),
+      async (argv) => {
+        await getPackage();
+        await getChangelog(argv.filename);
+
+        console.error(Chalk.green('✅ Changelog is valid'));
+        process.exit(0);
+      }
+    )
+    .command(
+      'prerelease',
+      'Check the requirements for creating a release',
+      (yargs) =>
+        yargs
+          .epilogue(
+            `Hint: You should consider adding this as your ${Chalk.bold(
+              'prerelease'
+            )} command in package.json.`
+          )
+          .options({
+            filename: {
+              default: 'CHANGELOG.md',
+              description: 'The name of the changelog file to write',
+            },
+          } as const),
+      async (argv) => {
+        await getPackage();
+        const changelog = await getChangelog(argv.filename);
+
+        for (const release of changelog.releases) {
+          if (!release || release.isEmpty()) {
+            console.error(`❌ No changes to the Changelog for release in ${argv.filename}`);
+            process.exit(1);
+          }
+        }
+      }
+    )
+    .command(
+      'release',
+      'Create a new release',
+      (yargs) =>
+        yargs
+          .epilogue(
+            `Hint you should consider adding the following as your ${Chalk.bold(
+              'version'
+            )} script in package.json: ${Chalk.bold('kacl release && git add CHANGELOG.md')}`
+          )
+          .options({
+            filename: {
+              default: 'CHANGELOG.md',
+              description: 'The name of the changelog file to write',
+            },
+          } as const),
+      async (argv) => {
+        const pkg = await getPackage();
+        const changelog = await getChangelog(argv.filename);
+        changelog.url = pkg.repository.url;
+
+        const unreleased = changelog.findRelease();
+        const existingRelease = changelog.findRelease(pkg.version);
+
+        if (!existingRelease) {
+          if (!unreleased || unreleased.isEmpty()) {
+            console.error(
+              Chalk.red(`❌ No changes to the Changelog for release in ${argv.filename}`)
+            );
+            process.exit(1);
+          }
+
+          unreleased.setVersion(pkg.version);
+          unreleased.date = new Date();
+
+          changelog.addRelease(new Release());
+
+          await Fs.writeFile(argv.filename, changelog.toString());
+
+          console.log(Chalk.green('Released Changelog!'));
+        } else if (unreleased && !unreleased.isEmpty()) {
+          console.error(
+            Chalk.red("❌ Release already exists, did you mean to bump your package's version?")
+          );
+          process.exit(1);
+        } else {
+          console.log(Chalk.blue('🚫 Changelog is up-to-date, not performing a release'));
+          process.exit(2);
+        }
+      }
+    )
+).argv;
+
+function attachChangeLogHandlers(yargs: Argv) {
+  for (const type of ['added', 'changed', 'deprecated', 'removed', 'fixed', 'security'] as const) {
+    yargs.command(
+      `${type} [change]`,
+      `Insert a ${type} change in the unreleased version.`,
+      (yargs) =>
+        yargs
+          .epilogue(
+            `Hint: Make sure that you quote your change as a single shell string (ie: kacl add added "Change text"). Note that if no change text is provided you will be prompted to enter such text in your $EDITOR of choice.`
+          )
+          .positional('change', {
+            type: 'string',
+            description: 'The description of the change',
+          })
+          .options({
+            filename: {
+              default: 'CHANGELOG.md',
+              description: 'The name of the changelog file to write',
+            },
+          }),
+      async (argv) => {
+        await getPackage();
+        const changelog = await getChangelog(argv.filename);
+        let unreleased = changelog.findRelease();
+
+        if (!unreleased) {
+          unreleased = new Release();
+          changelog.addRelease(unreleased);
+        }
+
+        const changeText = await readChangeText(type, argv.change);
+
+        unreleased.addChange(type, changeText);
 
         await Fs.writeFile(argv.filename, changelog.toString());
 
-        console.log(Chalk.green('Released Changelog!'));
-      } else if (unreleased && !unreleased.isEmpty()) {
-        console.error(
-          Chalk.red("❌ Release already exists, did you mean to bump your package's version?")
-        );
-        process.exit(1);
-      } else {
-        console.log(Chalk.blue('🚫 Changelog is up-to-date, not performing a release'));
-        process.exit(2);
+        console.error(Chalk.green(`✅ Wrote ${argv.filename}`));
+        process.exit(0);
       }
-    }
-  ).argv;
+    );
+  }
+
+  return yargs;
+}
 
 async function getChangelog(filename: string, mode: string = 'r') {
   let file: Fs.FileHandle | undefined;
@@ -292,7 +285,7 @@ async function readChangeText(changeKind: string, text?: string) {
   try {
     const text = editor.run(); // the text is also available in editor.text
 
-    if (editor.last_exit_status !== 0) {
+    if (editor.lastExitStatus !== 0) {
       throw new Error('The editor exited with a non-zero code');
     }
 
