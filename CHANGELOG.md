@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+### Fixed
+- Fix GitHub deploy Action expecting to deploy from `./dist` (copy-pasta error from another project).
 
 ## [1.1.0] - 2021-02-19
 ### Added
