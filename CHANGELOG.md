@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
+
+## [1.1.1] - 2021-02-19
 ### Fixed
 - Fix GitHub deploy Action expecting to deploy from `./dist` (copy-pasta error from another project).
 
@@ -23,5 +25,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/ggoodman/kacl/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/ggoodman/kacl/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/ggoodman/kacl/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/ggoodman/kacl/compare/v1.0.0...v1.1.0
